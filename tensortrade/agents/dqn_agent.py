@@ -16,6 +16,7 @@ import random
 import numpy as np
 import tensorflow as tf
 from collections import namedtuple
+import os.path
 
 from tensortrade.agents import Agent, ReplayMemory
 from datetime import datetime
@@ -35,7 +36,8 @@ class DQNAgent(Agent):
 
     def __init__(self,
                  env: 'TradingEnv',
-                 policy_network: tf.keras.Model = None):
+                 policy_network: tf.keras.Model = None,
+                 file_name: str = None):
         self.env = env
         self.n_actions = env.action_space.n
         self.observation_shape = env.observation_space.shape
@@ -46,6 +48,11 @@ class DQNAgent(Agent):
         self.target_network.trainable = False
 
         self.env.agent_id = self.id
+
+        self.file_name = file_name
+
+        if os.path.exists(self.file_name):
+            self.restore()
 
     def _build_policy_network(self):
         network = tf.keras.Sequential([
@@ -61,20 +68,19 @@ class DQNAgent(Agent):
 
         return network
 
-    def restore(self, path: str, **kwargs):
-        self.policy_network = tf.keras.models.load_model(path)
+    def restore(self, file_name: str = None, **kwargs):
+        if file_name is not None:
+            self.policy_network = tf.keras.models.load_model(file_name)
+        elif self.file_name is not None:
+            self.policy_network = tf.keras.models.load_model(self.file_name)
         self.target_network = tf.keras.models.clone_model(self.policy_network)
         self.target_network.trainable = False
 
-    def save(self, path: str, **kwargs):
-        episode: int = kwargs.get('episode', None)
-
-        if episode:
-            filename = "policy_network__" + self.id[:7] + "__" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".hdf5"
-        else:
-            filename = "policy_network__" + self.id[:7] + "__" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".hdf5"
-
-        self.policy_network.save(path + filename)
+    def save(self, file_name: str = None, **kwargs):
+        if file_name is not None:
+            self.policy_network.save(file_name)
+        elif self.file_name is not None:
+            self.policy_network.save(self.file_name)
 
     def get_action(self, state: np.ndarray, **kwargs) -> int:
         threshold: float = kwargs.get('threshold', 0)
@@ -121,8 +127,8 @@ class DQNAgent(Agent):
     def train(self,
               n_steps: int = None,
               n_episodes: int = None,
-              save_every: int = None,
-              save_path: str = None,
+              save_every: int = 1,
+              save_file_name: str = None,
               callback: callable = None,
               **kwargs) -> float:
         batch_size: int = kwargs.get('batch_size', 128)
@@ -184,8 +190,11 @@ class DQNAgent(Agent):
 
             is_checkpoint = save_every and episode % save_every == 0
 
-            if save_path and (is_checkpoint or episode == n_episodes - 1):
-                self.save(save_path, episode=episode)
+            if is_checkpoint or episode == n_episodes - 1:
+                if self.file_name is not None:
+                    self.save()
+                if save_file_name:
+                    self.save(save_file_name)
 
             if not render_interval or steps_done < n_steps:
                 self.env.render(
