@@ -19,8 +19,6 @@ from collections import namedtuple
 import os.path
 
 from tensortrade.agents import Agent, ReplayMemory
-from datetime import datetime
-
 
 DQNTransition = namedtuple('DQNTransition', ['state', 'action', 'reward', 'next_state', 'done'])
 
@@ -37,7 +35,8 @@ class DQNAgent(Agent):
     def __init__(self,
                  env: 'TradingEnv',
                  policy_network: tf.keras.Model = None,
-                 file_name: str = None):
+                 agent_name: str = 'dqn_agent',
+                 path: str = 'agents/'):
         self.env = env
         self.n_actions = env.action_space.n
         self.observation_shape = env.observation_space.shape
@@ -49,10 +48,17 @@ class DQNAgent(Agent):
 
         self.env.agent_id = self.id
 
-        self.file_name = file_name
+        self.agent_name = agent_name
+        self.path = path
 
-        if os.path.exists(self.file_name):
-            self.restore()
+        if self._weight_file_exists(self._default_file_name()):
+            self.restore(self._default_file_name())
+
+    def _weight_file_exists(self, file_name: str):
+        return os.path.exists(file_name + '.hdf5')
+
+    def _default_file_name(self):
+        return self.path + self.agent_name
 
     def _build_policy_network(self):
         network = tf.keras.Sequential([
@@ -68,19 +74,13 @@ class DQNAgent(Agent):
 
         return network
 
-    def restore(self, file_name: str = None, **kwargs):
-        if file_name is not None:
-            self.policy_network = tf.keras.models.load_model(file_name)
-        elif self.file_name is not None:
-            self.policy_network = tf.keras.models.load_model(self.file_name)
+    def restore(self, file_name: str, **kwargs):
+        self.policy_network = tf.keras.models.load_model(file_name + '.hdf5')
         self.target_network = tf.keras.models.clone_model(self.policy_network)
         self.target_network.trainable = False
 
-    def save(self, file_name: str = None, **kwargs):
-        if file_name is not None:
-            self.policy_network.save(file_name)
-        elif self.file_name is not None:
-            self.policy_network.save(self.file_name)
+    def save(self, file_name: str, **kwargs):
+        self.policy_network.save(file_name + '.hdf5')
 
     def get_action(self, state: np.ndarray, **kwargs) -> int:
         threshold: float = kwargs.get('threshold', 0)
@@ -92,7 +92,8 @@ class DQNAgent(Agent):
         else:
             return np.argmax(self.policy_network(np.expand_dims(state, 0)))
 
-    def _apply_gradient_descent(self, memory: ReplayMemory, batch_size: int, learning_rate: float, discount_factor: float):
+    def _apply_gradient_descent(self, memory: ReplayMemory, batch_size: int, learning_rate: float,
+                                discount_factor: float):
         optimizer = tf.keras.optimizers.Adam(lr=learning_rate)
         loss = tf.keras.losses.Huber()
 
@@ -152,10 +153,11 @@ class DQNAgent(Agent):
 
         print('====      AGENT ID: {}      ===='.format(self.id))
 
+        steps_done = 0
+
         while episode < n_episodes and not stop_training:
             state = self.env.reset()
             done = False
-            steps_done = 0
 
             while not done:
                 threshold = eps_end + (eps_start - eps_end) * np.exp(-total_steps_done / eps_decay_steps)
@@ -167,7 +169,7 @@ class DQNAgent(Agent):
                 state = next_state
                 total_reward += reward
                 steps_done += 1
-                total_steps_done +=1
+                total_steps_done += 1
 
                 if len(memory) < batch_size:
                     continue
@@ -191,10 +193,10 @@ class DQNAgent(Agent):
             is_checkpoint = save_every and episode % save_every == 0
 
             if is_checkpoint or episode == n_episodes - 1:
-                if self.file_name is not None:
-                    self.save()
-                if save_file_name:
+                if save_file_name is not None:
                     self.save(save_file_name)
+                else:
+                    self.save(self._default_file_name())
 
             if not render_interval or steps_done < n_steps:
                 self.env.render(

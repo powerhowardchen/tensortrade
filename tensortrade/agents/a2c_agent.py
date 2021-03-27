@@ -18,15 +18,15 @@ References:
     - http://inoryy.com/post/tensorflow2-deep-reinforcement-learning/#agent-interface
 """
 
-
 import random
 import numpy as np
 import tensorflow as tf
 
 from collections import namedtuple
+import os.path
 
 from tensortrade.agents import Agent, ReplayMemory
-from datetime import  datetime
+from datetime import datetime
 
 A2CTransition = namedtuple('A2CTransition', ['state', 'action', 'reward', 'done', 'value'])
 
@@ -37,7 +37,9 @@ class A2CAgent(Agent):
                  env: 'TradingEnvironment',
                  shared_network: tf.keras.Model = None,
                  actor_network: tf.keras.Model = None,
-                 critic_network: tf.keras.Model = None):
+                 critic_network: tf.keras.Model = None,
+                 agent_name: str = 'dqn_agent',
+                 path: str = 'agents/'):
         self.env = env
         self.n_actions = env.action_space.n
         self.observation_shape = env.observation_space.shape
@@ -47,6 +49,18 @@ class A2CAgent(Agent):
         self.critic_network = critic_network or self._build_critic_network()
 
         self.env.agent_id = self.id
+
+        self.agent_name = agent_name
+        self.path = path
+
+        if self._weight_file_exists(self._default_file_name()):
+            self.restore(self._default_file_name())
+
+    def _weight_file_exists(self, file_name: str):
+        return os.path.exists(file_name + '_actor.hdf5') and os.path.exists(file_name + '_critic.hdf5')
+
+    def _default_file_name(self):
+        return self.path + self.agent_name
 
     def _build_shared_network(self):
         network = tf.keras.Sequential([
@@ -77,30 +91,13 @@ class A2CAgent(Agent):
 
         return tf.keras.Sequential([self.shared_network, critic_head])
 
-    def restore(self, path: str, **kwargs):
-        actor_filename: str = kwargs.get('actor_filename', None)
-        critic_filename: str = kwargs.get('critic_filename', None)
+    def restore(self, file_name: str, **kwargs):
+        self.actor_network = tf.keras.models.load_model(file_name + '_actor.hdf5')
+        self.critic_network = tf.keras.models.load_model(file_name + '_critic.hdf5')
 
-        if not actor_filename or not critic_filename:
-            raise ValueError(
-                'The `restore` method requires a directory `path`, a `critic_filename`, and an `actor_filename`.')
-
-        self.actor_network = tf.keras.models.load_model(path + actor_filename)
-        self.critic_network = tf.keras.models.load_model(path + critic_filename)
-
-    def save(self, path: str, **kwargs):
-        episode: int = kwargs.get('episode', None)
-
-        if episode:
-            suffix = self.id[:7] + "__" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".hdf5"
-            actor_filename = "actor_network__" + suffix
-            critic_filename = "critic_network__" + suffix
-        else:
-            actor_filename = "actor_network__" + self.id[:7] + "__" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".hdf5"
-            critic_filename = "critic_network__" + self.id[:7] + "__" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".hdf5"
-
-        self.actor_network.save(path + actor_filename)
-        self.critic_network.save(path + critic_filename)
+    def save(self, file_name: str, **kwargs):
+        self.actor_network.save(file_name + '_actor.hdf5')
+        self.critic_network.save(file_name + '_critic.hdf5')
 
     def get_action(self, state: np.ndarray, **kwargs) -> int:
         threshold: float = kwargs.get('threshold', 0)
@@ -118,7 +115,7 @@ class A2CAgent(Agent):
                                 batch_size: int,
                                 learning_rate: float,
                                 discount_factor: float,
-                                entropy_c: float,):
+                                entropy_c: float, ):
         huber_loss = tf.keras.losses.Huber()
         wsce_loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         optimizer = tf.keras.optimizers.Adam(lr=learning_rate)
@@ -168,7 +165,7 @@ class A2CAgent(Agent):
               n_steps: int = None,
               n_episodes: int = None,
               save_every: int = None,
-              save_path: str = None,
+              save_file_name: str = None,
               callback: callable = None,
               **kwargs) -> float:
         batch_size: int = kwargs.get('batch_size', 128)
@@ -228,8 +225,11 @@ class A2CAgent(Agent):
 
             is_checkpoint = save_every and episode % save_every == 0
 
-            if save_path and (is_checkpoint or episode == n_episodes):
-                self.save(save_path, episode=episode)
+            if is_checkpoint or episode == n_episodes - 1:
+                if save_file_name is not None:
+                    self.save(save_file_name)
+                else:
+                    self.save(self._default_file_name())
 
             episode += 1
 

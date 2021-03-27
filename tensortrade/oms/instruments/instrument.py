@@ -131,16 +131,20 @@ class Instrument:
 # Crypto
 BTC = Instrument('BTC', 8, 'Bitcoin')
 ETH = Instrument('ETH', 8, 'Ethereum')
-XRP = Instrument('XRP', 8, 'XRP')
-NEO = Instrument('NEO', 8, 'NEO')
-BCH = Instrument('BCH', 8, 'Bitcoin Cash')
-LTC = Instrument('LTC', 8, 'Litecoin')
-ETC = Instrument('ETC', 8, 'Ethereum Classic')
-XLM = Instrument('XLM', 8, 'Stellar Lumens')
-LINK = Instrument('LINK', 8, 'Chainlink')
+
+ADA = Instrument('ADA', 8, 'Cardano')
 ATOM = Instrument('ATOM', 8, 'Cosmos')
+BCH = Instrument('BCH', 8, 'Bitcoin Cash')
 DAI = Instrument('DAI', 8, 'Dai')
+DASH = Instrument('DASH', 8, 'DASH Coin')
+EOS = Instrument('EOS', 8, 'EOS Coin')
+ETC = Instrument('ETC', 8, 'Ethereum Classic')
+LINK = Instrument('LINK', 8, 'Chainlink')
+LTC = Instrument('LTC', 8, 'Litecoin')
+NEO = Instrument('NEO', 8, 'NEO')
 USDT = Instrument('USDT', 8, 'Tether')
+XLM = Instrument('XLM', 8, 'Stellar Lumens')
+XRP = Instrument('XRP', 8, 'XRP')
 
 # FX
 USD = Instrument('USD', 2, 'U.S. Dollar')
@@ -148,6 +152,7 @@ EUR = Instrument('EUR', 2, 'Euro')
 JPY = Instrument('JPY', 2, 'Japanese Yen')
 KWN = Instrument('KWN', 2, 'Korean Won')
 AUD = Instrument('AUD', 2, 'Australian Dollar')
+TWD = Instrument('TWD', 2, 'Taiwan Yen')
 
 # Commodities
 XAU = Instrument('XAU', 2, 'Gold futures')
